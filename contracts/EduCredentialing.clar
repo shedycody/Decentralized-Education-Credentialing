@@ -21,6 +21,7 @@
 ;; data vars
 (define-data-var last-credential-id uint u0)
 (define-data-var total-institutions uint u0)
+(define-data-var rankings-updated-block uint u0)
 
 ;; data maps
 (define-map institutions
@@ -63,6 +64,23 @@
     { count: uint }
 )
 
+(define-map institution-metrics
+    { institution: principal }
+    {
+        total-issued: uint,
+        total-revoked: uint,
+        total-validity-duration: uint,
+        registration-block: uint,
+        reputation-score: uint,
+        last-activity-block: uint
+    }
+)
+
+(define-map institution-rankings
+    { rank: uint }
+    { institution: principal }
+)
+
 ;; public functions
 
 (define-public (register-institution (name (string-ascii 100)) (description (string-ascii 255)))
@@ -79,6 +97,17 @@
                 description: description,
                 verified: false,
                 registration-block: current-block
+            }
+        )
+        (map-set institution-metrics
+            { institution: caller }
+            {
+                total-issued: u0,
+                total-revoked: u0,
+                total-validity-duration: u0,
+                registration-block: current-block,
+                reputation-score: u1000,
+                last-activity-block: current-block
             }
         )
         (var-set total-institutions (+ (var-get total-institutions) u1))
@@ -149,6 +178,7 @@
         )
         
         (var-set last-credential-id new-credential-id)
+        (unwrap-panic (update-institution-metrics-on-issue caller expiry-date))
         (ok new-credential-id)
     )
 )
@@ -165,6 +195,7 @@
             { credential-id: credential-id }
             (merge (unwrap-panic credential-data) { verified: false })
         )
+        (unwrap-panic (update-institution-metrics-on-revoke (get institution (unwrap-panic credential-data))))
         (ok true)
     )
 )
@@ -264,11 +295,231 @@
     )
 )
 
+(define-read-only (get-institution-metrics (institution principal))
+    (map-get? institution-metrics { institution: institution })
+)
+
+(define-read-only (get-institution-reputation (institution principal))
+    (match (map-get? institution-metrics { institution: institution })
+        metrics-data (get reputation-score metrics-data)
+        u0
+    )
+)
+
+(define-read-only (get-institution-success-rate (institution principal))
+    (match (map-get? institution-metrics { institution: institution })
+        metrics-data 
+        (let
+            (
+                (total-issued (get total-issued metrics-data))
+                (total-revoked (get total-revoked metrics-data))
+            )
+            (if (> total-issued u0)
+                (/ (* (- total-issued total-revoked) u10000) total-issued)
+                u10000
+            )
+        )
+        u0
+    )
+)
+
+(define-read-only (get-institution-avg-validity (institution principal))
+    (match (map-get? institution-metrics { institution: institution })
+        metrics-data
+        (let
+            (
+                (total-issued (get total-issued metrics-data))
+                (total-validity (get total-validity-duration metrics-data))
+            )
+            (if (> total-issued u0)
+                (/ total-validity total-issued)
+                u0
+            )
+        )
+        u0
+    )
+)
+
+(define-read-only (compare-institutions (institution-a principal) (institution-b principal))
+    (let
+        (
+            (rep-a (get-institution-reputation institution-a))
+            (rep-b (get-institution-reputation institution-b))
+        )
+        (if (> rep-a rep-b)
+            institution-a
+            institution-b
+        )
+    )
+)
+
+(define-read-only (get-top-institutions-by-reputation (limit uint))
+    (let
+        (
+            (max-limit (if (< limit u20) limit u20))
+        )
+        (fold get-higher-reputation-institution
+            (list 
+                u1 u2 u3 u4 u5 u6 u7 u8 u9 u10
+                u11 u12 u13 u14 u15 u16 u17 u18 u19 u20
+            )
+            (list)
+        )
+    )
+)
+
+(define-read-only (get-institution-rank (institution principal))
+    (let
+        (
+            (institution-rep (get-institution-reputation institution))
+            (better-count (fold count-better-institutions
+                (list 
+                    u1 u2 u3 u4 u5 u6 u7 u8 u9 u10
+                    u11 u12 u13 u14 u15 u16 u17 u18 u19 u20
+                )
+                { target-rep: institution-rep, count: u0 }
+            ))
+        )
+        (+ (get count better-count) u1)
+    )
+)
+
 ;; private functions
 
 (define-private (is-valid-institution (institution principal))
     (match (map-get? institutions { institution-address: institution })
         institution-data (get verified institution-data)
         false
+    )
+)
+
+(define-private (update-institution-metrics-on-issue (institution principal) (expiry-date (optional uint)))
+    (let
+        (
+            (current-metrics (default-to 
+                {
+                    total-issued: u0,
+                    total-revoked: u0,
+                    total-validity-duration: u0,
+                    registration-block: stacks-block-height,
+                    reputation-score: u1000,
+                    last-activity-block: stacks-block-height
+                }
+                (map-get? institution-metrics { institution: institution })
+            ))
+            (validity-duration (match expiry-date
+                exp-block (if (> exp-block stacks-block-height) (- exp-block stacks-block-height) u0)
+                u31536000
+            ))
+        )
+        (map-set institution-metrics
+            { institution: institution }
+            (merge current-metrics
+                {
+                    total-issued: (+ (get total-issued current-metrics) u1),
+                    total-validity-duration: (+ (get total-validity-duration current-metrics) validity-duration),
+                    last-activity-block: stacks-block-height
+                }
+            )
+        )
+        (calculate-and-update-reputation institution)
+    )
+)
+
+(define-private (update-institution-metrics-on-revoke (institution principal))
+    (let
+        (
+            (current-metrics (default-to 
+                {
+                    total-issued: u0,
+                    total-revoked: u0,
+                    total-validity-duration: u0,
+                    registration-block: stacks-block-height,
+                    reputation-score: u1000,
+                    last-activity-block: stacks-block-height
+                }
+                (map-get? institution-metrics { institution: institution })
+            ))
+        )
+        (map-set institution-metrics
+            { institution: institution }
+            (merge current-metrics
+                {
+                    total-revoked: (+ (get total-revoked current-metrics) u1),
+                    last-activity-block: stacks-block-height
+                }
+            )
+        )
+        (calculate-and-update-reputation institution)
+    )
+)
+
+(define-private (calculate-and-update-reputation (institution principal))
+    (let
+        (
+            (metrics (unwrap-panic (map-get? institution-metrics { institution: institution })))
+            (total-issued (get total-issued metrics))
+            (total-revoked (get total-revoked metrics))
+            (avg-validity (if (> total-issued u0) 
+                (/ (get total-validity-duration metrics) total-issued) 
+                u0))
+            (registration-age (- stacks-block-height (get registration-block metrics)))
+            (success-rate (if (> total-issued u0) 
+                (/ (* (- total-issued total-revoked) u10000) total-issued) 
+                u10000))
+            (validity-score (if (< (/ avg-validity u1000) u5000) (/ avg-validity u1000) u5000))
+            (longevity-score (if (< (/ registration-age u100) u2500) (/ registration-age u100) u2500))
+            (reputation-score (/ (+ (* success-rate u5) (* validity-score u3) (* longevity-score u2)) u10))
+        )
+        (map-set institution-metrics
+            { institution: institution }
+            (merge metrics { reputation-score: reputation-score })
+        )
+        (ok reputation-score)
+    )
+)
+
+(define-private (get-higher-reputation-institution (index uint) (acc (list 20 principal)))
+    (let
+        (
+            (institution-addr (map-get? institution-rankings { rank: index }))
+        )
+        (match institution-addr
+            addr-data
+            (let
+                (
+                    (institution (get institution addr-data))
+                )
+                (if (is-institution-verified institution)
+                    (unwrap-panic (as-max-len? (append acc institution) u20))
+                    acc
+                )
+            )
+            acc
+        )
+    )
+)
+
+(define-private (count-better-institutions (index uint) (acc { target-rep: uint, count: uint }))
+    (let
+        (
+            (institution-addr (map-get? institution-rankings { rank: index }))
+            (target-rep (get target-rep acc))
+            (current-count (get count acc))
+        )
+        (match institution-addr
+            addr-data
+            (let
+                (
+                    (institution (get institution addr-data))
+                    (institution-rep (get-institution-reputation institution))
+                )
+                (if (> institution-rep target-rep)
+                    { target-rep: target-rep, count: (+ current-count u1) }
+                    acc
+                )
+            )
+            acc
+        )
     )
 )

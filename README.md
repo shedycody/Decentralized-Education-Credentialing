@@ -10,6 +10,9 @@ A decentralized education credentialing system built on the Stacks blockchain. I
 - 🔒 **Fraud Prevention**: Blockchain-based immutable credential records
 - ⏰ **Expiration Support**: Set expiration dates for time-sensitive credentials
 - 🗃️ **IPFS Integration**: Store credential metadata on IPFS
+- 🏆 **Reputation System**: Track institutional performance with transparent metrics
+- 📊 **Institution Rankings**: Discover top-performing educational institutions
+- 🎯 **Performance Analytics**: Success rates, validity periods, and longevity scores
 
 ## 🚀 Quick Start
 
@@ -81,6 +84,41 @@ clarinet test
 (contract-call? .EduCredentialing verify-institution 'SP2J6ZY48GV1EZ5V2V5RB9MP66SW86PYKKNRV9EJ7)
 ```
 
+### For Data Analytics & Rankings 📊
+
+#### 1. Get Institution Performance Metrics 🏆
+```clarity
+(contract-call? .EduCredentialing get-institution-metrics 'SP2J6ZY48GV1EZ5V2V5RB9MP66SW86PYKKNRV9EJ7)
+```
+
+#### 2. Check Institution Reputation Score 🎆
+```clarity
+(contract-call? .EduCredentialing get-institution-reputation 'SP2J6ZY48GV1EZ5V2V5RB9MP66SW86PYKKNRV9EJ7)
+```
+
+#### 3. Get Success Rate 🎯
+```clarity
+(contract-call? .EduCredentialing get-institution-success-rate 'SP2J6ZY48GV1EZ5V2V5RB9MP66SW86PYKKNRV9EJ7)
+```
+
+#### 4. View Top Performing Institutions 🥇
+```clarity
+(contract-call? .EduCredentialing get-top-institutions-by-reputation u10)
+```
+
+#### 5. Find Institution Rank 🏅
+```clarity
+(contract-call? .EduCredentialing get-institution-rank 'SP2J6ZY48GV1EZ5V2V5RB9MP66SW86PYKKNRV9EJ7)
+```
+
+#### 6. Compare Two Institutions ⚙️
+```clarity
+(contract-call? .EduCredentialing compare-institutions 
+    'SP2J6ZY48GV1EZ5V2V5RB9MP66SW86PYKKNRV9EJ7
+    'SP3456ABCDEF...
+)
+```
+
 ## 🏗️ Contract Structure
 
 ### Data Maps
@@ -89,6 +127,8 @@ clarinet test
 - **credentials**: Store all credential data including metadata
 - **recipient-credentials**: Track credentials by recipient
 - **credential-recipients-count**: Count credentials per recipient
+- **institution-metrics**: Track performance metrics for reputation scoring
+- **institution-rankings**: Maintain sorted rankings by reputation
 
 ### Key Functions
 
@@ -100,6 +140,12 @@ clarinet test
 | `verify-credential` | Check if credential is valid | Read-only |
 | `revoke-credential` | Revoke an issued credential | Institution |
 | `get-credential` | Get credential details | Read-only |
+| `get-institution-metrics` | Get performance metrics for institution | Read-only |
+| `get-institution-reputation` | Get reputation score for institution | Read-only |
+| `get-institution-success-rate` | Get success rate percentage | Read-only |
+| `get-top-institutions-by-reputation` | Get ranked list of top institutions | Read-only |
+| `get-institution-rank` | Get specific institution's rank | Read-only |
+| `compare-institutions` | Compare two institutions by reputation | Read-only |
 
 ## 🔐 Security Features
 
@@ -108,6 +154,8 @@ clarinet test
 - ✅ NFT ownership proves credential ownership
 - ✅ Expiration date validation
 - ✅ Owner-only institution verification
+- ✅ Transparent reputation tracking prevents manipulation
+- ✅ Automated performance metric calculations
 
 ## 📱 Frontend Integration
 

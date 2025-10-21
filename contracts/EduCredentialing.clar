@@ -81,6 +81,11 @@
     { institution: principal }
 )
 
+(define-map credential-allowlist
+    { recipient: principal, authorized: principal }
+    { allowed: bool }
+)
+
 ;; public functions
 
 (define-public (register-institution (name (string-ascii 100)) (description (string-ascii 255)))
@@ -382,6 +387,39 @@
         )
         (+ (get count better-count) u1)
     )
+)
+
+(define-public (add-to-allowlist (authorized principal))
+    (ok (map-set credential-allowlist
+        { recipient: tx-sender, authorized: authorized }
+        { allowed: true }
+    ))
+)
+
+(define-public (remove-from-allowlist (authorized principal))
+    (ok (map-delete credential-allowlist
+        { recipient: tx-sender, authorized: authorized }
+    ))
+)
+
+(define-public (transfer-credential-authorized (credential-id uint) (from principal) (to principal))
+    (let
+        (
+            (is-allowed (default-to false (get allowed (map-get? credential-allowlist { recipient: from, authorized: tx-sender }))))
+        )
+        (asserts! is-allowed (err u403))
+        (asserts! (is-some (map-get? credentials { credential-id: credential-id })) (err u404))
+        (ok (map-set credentials
+            { credential-id: credential-id }
+            (merge (unwrap-panic (map-get? credentials { credential-id: credential-id }))
+                { recipient: to }
+            )
+        ))
+    )
+)
+
+(define-read-only (is-on-allowlist (recipient principal) (authorized principal))
+    (default-to false (get allowed (map-get? credential-allowlist { recipient: recipient, authorized: authorized })))
 )
 
 ;; private functions
